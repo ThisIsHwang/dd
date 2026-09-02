@@ -19,7 +19,8 @@ Install the system package `numactl` when permitted. The launcher works without 
 export OPENVLA_OFT_CHECKPOINT="$PWD/checkpoints/openvla-oft-libero10"
 export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_smoke
 export PROGRESSFLIP_GPU_LIST=0,1,2,3,4,5,6,7
-export PF_WORKERS_PER_GPU=auto
+# Smoke has only four frozen causal pairs, so loading 24 model replicas would waste memory.
+export PF_WORKERS_PER_GPU=1
 export MUJOCO_GL=egl
 export PYOPENGL_PLATFORM=egl
 
@@ -27,7 +28,7 @@ progressflip preflight --config configs/smoke.yaml --expect-gpus 8
 bash scripts/run_pipeline.sh configs/smoke.yaml
 ```
 
-The smoke run uses all eight GPUs for both collection and causal rollouts. On an empty 80 GB H100 node, auto mode normally proposes up to three model workers per GPU if the memory estimate permits it.
+The collection smoke uses all eight GPUs. The causal-rollout smoke contains only four pair bundles, so four workers receive pair work while the remaining workers verify model and EGL startup. The purpose is correctness, not a throughput benchmark.
 
 Inspect:
 
@@ -45,8 +46,15 @@ Use a new output directory:
 
 ```bash
 export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_full
-# Override only after reading the smoke utilization report.
+# Start from the smoke memory report. An empty H100-80GB node usually fits three replicas.
 export PF_WORKERS_PER_GPU=3
+bash scripts/run_pipeline.sh configs/full.yaml
+```
+
+Alternatively, remove the override to let the memory planner choose automatically:
+
+```bash
+unset PF_WORKERS_PER_GPU
 bash scripts/run_pipeline.sh configs/full.yaml
 ```
 
@@ -87,4 +95,4 @@ sbatch slurm/1node_8gpu.sbatch
 
 The Slurm wrapper requests eight GPUs, 128 CPU cores, all node memory, and 72 hours. It uses node-local temporary storage for the live queue and copies outputs to `PROGRESSFLIP_PERSIST_ROOT` on exit.
 
-See [GPU utilization design](GPU_UTILIZATION.md) for the queue, cache, memory model, and tuning rules.
+See [GPU utilization design](GPU_UTILIZATION.md) for the queue, cache, memory model, EGL placement, and tuning rules.
