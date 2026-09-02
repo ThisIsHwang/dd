@@ -1,0 +1,147 @@
+model:
+  checkpoint: ${OPENVLA_OFT_CHECKPOINT}
+  num_images: 2
+  center_crop: true
+  open_loop_steps: 8
+
+environment:
+  suite: libero_10
+  image_size: 256
+  wait_steps: 10
+  max_steps: 520
+  control_freq: 20
+  render_gpu_device_id: 0
+
+data:
+  output_root: ${PROGRESSFLIP_OUTPUT_ROOT}
+  pairs_per_task: 10
+  candidate_initial_states: 50
+  save_videos: true
+  video_stride: 2
+  video_conditions:
+    - TRUE_K1
+    - TRUE_RECOMPOSED_K1
+    - FULL_OLD_K1
+    - ROBOT_OLD_K1
+    - NONROBOT_OLD_K1
+    - STALE_TRUE_ACTION
+    - TRUE_STALE_ACTION
+    - STALE_K1_RESET
+    - REMAINING_INSTRUCTION
+
+experiment:
+  predicate_stable_steps: 4
+  stable_object_velocity: 0.15
+  replay_tolerance: 1.0e-5
+  recomposition_mae_threshold: 3.0
+  bootstrap_samples: 10000
+  analysis_seed: 17
+  conditions:
+    - TRUE_K1
+    - TRUE_RECOMPOSED_K1
+    - FULL_OLD_K1
+    - ROBOT_OLD_K1
+    - NONROBOT_OLD_K1
+    - EEF_OLD_K1
+    - ARM_OLD_K1
+    - ROBOT_MASK_K1
+    - ROBOT_RANDOM_K1
+    - ROBOT_PHASE25_K1
+    - ROBOT_PHASE50_K1
+    - ROBOT_PHASE75_K1
+    - STALE_K0
+    - STALE_K1
+    - STALE_TRUE_ACTION
+    - TRUE_STALE_ACTION
+    - STALE_K1_RESET
+    - STALE_SCALE_010
+    - STALE_SCALE_025
+    - STALE_SCALE_050
+    - STALE_SCALE_075
+    - STALE_SCALE_100
+    - ORIGINAL_INSTRUCTION
+    - REMAINING_INSTRUCTION
+    - EXPLICIT_PROGRESS
+    - INCORRECT_SUBGOAL
+  confirmatory_contrasts:
+    - {a: TRUE_RECOMPOSED_K1, b: ROBOT_OLD_K1}
+    - {a: NONROBOT_OLD_K1, b: ROBOT_OLD_K1}
+    - {a: STALE_K0, b: STALE_K1}
+    - {a: STALE_TRUE_ACTION, b: TRUE_STALE_ACTION}
+    - {a: STALE_K1_RESET, b: STALE_K1}
+    - {a: REMAINING_INSTRUCTION, b: ORIGINAL_INSTRUCTION}
+
+tasks:
+  - key: microwave_close
+    task_id: 9
+    trigger:
+      distance_m: 0.12
+      require_gripper_open: true
+      gripper_aperture_min: 0.02
+      max_object_velocity: 0.05
+      max_prefix_steps: 300
+      require_all_goals_false: true
+    candidates:
+      - object: white_yellow_mug_1
+        predicate: ["in", white_yellow_mug_1, microwave_1_heating_region]
+        remaining_instruction: Close the microwave door.
+        explicit_progress_instruction: The white and yellow mug is already inside the microwave. Close the microwave door now.
+        incorrect_instruction: Pick up the white and yellow mug from its original table position.
+
+  - key: drawer_close
+    task_id: 3
+    trigger:
+      distance_m: 0.13
+      require_gripper_open: true
+      gripper_aperture_min: 0.02
+      max_object_velocity: 0.05
+      max_prefix_steps: 300
+      require_all_goals_false: true
+    candidates:
+      - object: akita_black_bowl_1
+        predicate: ["in", akita_black_bowl_1, white_cabinet_1_bottom_region]
+        remaining_instruction: Close the bottom drawer of the white cabinet.
+        explicit_progress_instruction: The black bowl is already inside the bottom drawer. Close the bottom drawer now.
+        incorrect_instruction: Pick up the black bowl from its original table position.
+
+  - key: mugs_plates
+    task_id: 4
+    trigger:
+      distance_m: 0.13
+      require_gripper_open: true
+      gripper_aperture_min: 0.02
+      max_object_velocity: 0.05
+      max_prefix_steps: 300
+      require_all_goals_false: true
+    candidates:
+      - object: porcelain_mug_1
+        predicate: ["on", porcelain_mug_1, plate_1]
+        remaining_instruction: Put the white and yellow mug on the other plate.
+        explicit_progress_instruction: The porcelain mug is already on its plate. Put the white and yellow mug on the other plate.
+        incorrect_instruction: Pick up the porcelain mug from its original position.
+      - object: white_yellow_mug_1
+        predicate: ["on", white_yellow_mug_1, plate_2]
+        remaining_instruction: Put the porcelain mug on the other plate.
+        explicit_progress_instruction: The white and yellow mug is already on its plate. Put the porcelain mug on the other plate.
+        incorrect_instruction: Pick up the white and yellow mug from its original position.
+
+  - key: soup_cheese_basket
+    task_id: 7
+    trigger:
+      distance_m: 0.13
+      require_gripper_open: true
+      gripper_aperture_min: 0.02
+      max_object_velocity: 0.05
+      max_prefix_steps: 300
+      require_all_goals_false: true
+    candidates:
+      - object: alphabet_soup_1
+        predicate: ["in", alphabet_soup_1, basket_1_contain_region]
+        remaining_instruction: Put the cream cheese in the basket.
+        explicit_progress_instruction: The alphabet soup is already in the basket. Put the cream cheese in the basket.
+        incorrect_instruction: Pick up the alphabet soup from its original position.
+      - object: cream_cheese_1
+        predicate: ["in", cream_cheese_1, basket_1_contain_region]
+        remaining_instruction: Put the alphabet soup in the basket.
+        explicit_progress_instruction: The cream cheese is already in the basket. Put the alphabet soup in the basket.
+        incorrect_instruction: Pick up the cream cheese from its original position.
