@@ -93,6 +93,13 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def _install_worker_egl_affinity() -> None:
+    from .egl_affinity import install_cuda_visible_egl_affinity
+
+    report = install_cuda_visible_egl_affinity()
+    logging.getLogger(__name__).info("EGL affinity: %s", report)
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     logging.basicConfig(
@@ -116,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         exit_code = 0
     elif arguments.command == "collect-dynamic-worker":
+        _install_worker_egl_affinity()
         result = run_collection_worker(cfg, arguments.worker_id)
         exit_code = 0
     elif arguments.command == "freeze-pairs":
@@ -135,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         exit_code = 0
     elif arguments.command == "run-dynamic-worker":
+        _install_worker_egl_affinity()
         result = run_dynamic_worker(cfg, arguments.worker_id)
         exit_code = 0
     elif arguments.command == "queue-status":
