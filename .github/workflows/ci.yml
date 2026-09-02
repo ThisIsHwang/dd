@@ -14,3 +14,7 @@ jobs:
       - run: pytest
       - run: python -m compileall -q src tests
       - run: ruff check src tests
+      - name: Check shell and Slurm syntax
+        run: |
+          bash -n scripts/*.sh
+          for file in slurm/*.sbatch; do bash -n "$file"; done
