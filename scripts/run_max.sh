@@ -129,7 +129,10 @@ for ((slot=0; slot<SLOTS; slot++)); do
       export PF_PHYSICAL_GPU="$gpu"
       export PF_GPU_SLOT="$slot"
       export PF_WORKER_ID="$worker_id"
-      export MUJOCO_EGL_DEVICE_ID="${PF_EGL_DEVICE_ID:-$gpu}"
+      # The process sees one CUDA device, so LIBERO's render_gpu_device_id=0 is
+      # the only valid logical CUDA ordinal. Do not pass a host physical index
+      # through MUJOCO_EGL_DEVICE_ID; EGL device enumeration is a different namespace.
+      unset MUJOCO_EGL_DEVICE_ID
       export HF_MODULES_CACHE="$OUTPUT_ROOT/cache/hf_modules/$worker_id"
       export CUDA_CACHE_PATH="$OUTPUT_ROOT/cache/cuda/gpu$(printf '%02d' "$gpu")"
       mkdir -p "$HF_MODULES_CACHE" "$CUDA_CACHE_PATH"
