@@ -1,200 +1,130 @@
-# ProgressFlip: Visual Self-State Causality in VLA Policies
+# ProgressFlip VLA
 
-A standalone research repository for testing why vision-language-action (VLA) policies fail after a task is externally advanced.
+A standalone research repository for controlled causal experiments on **visual self-state dominance** in vision-language-action policies.
 
-The central experiment holds the physical robot and task state fixed, then changes only what the policy sees or which first action is executed. It separates four explanations:
+The experiments hold the physical task state fixed and intervene on robot pixels, first actions, or instructions. They test whether a VLA follows the advanced scene state or a visually implied stale robot state.
 
-1. **Robot-pixel shortcut:** visible robot pixels, rather than the advanced task state, drive the first decision.
-2. **First-action mediation:** one action generated from a stale visual self-state causes the persistent failure.
-3. **Task-phase versus self-localization:** a remaining-subgoal instruction can rescue high-level phase confusion, but not a low-level position-estimation error.
-4. **Decoder-specific behavior:** the experiment is implemented for both OpenVLA-OFT and the original autoregressive OpenVLA checkpoint.
+## Main experiment families
 
-## Implemented interventions
+- **Robot-pixel factorization:** true recomposition, robot-old, nonrobot-old, EEF-old, arm-old, masking, random robot pose, and phase interpolation.
+- **First-action mediation:** query-only `K0`, true/stale action crossovers, post-action physical reset, and action-scale curves.
+- **Instruction rescue:** original instruction, remaining subgoal, explicit progress, and an intentionally wrong previous subgoal.
 
-### Pixel-level causal controls
+Every condition within a pair uses the same initial state, action prefix, and physically advanced endpoint state.
 
-All conditions begin from the same frozen prefix and the same physically advanced endpoint state.
+## 8×H100 throughput architecture
 
-| Condition family | What changes at the first policy query |
-|---|---|
-| True recomposition | Remove and paste the same endpoint robot; compositor control |
-| Robot-old | Current scene, old robot pixels only |
-| Non-robot-old | Current robot, old non-robot pixels |
-| EEF-old | Old gripper/end-effector pixels only |
-| Arm-old | Old arm pixels excluding the end effector |
-| Robot-mask | Remove visible robot pixels |
+The default launcher is designed for one node with eight H100 GPUs:
 
-Robot, arm, and end-effector masks are rendered from MuJoCo element segmentation. Every outcome run records mask coverage, image hashes, image deltas, and the exact generated composite.
+- all eight GPUs participate in **candidate collection** and **rollout execution**;
+- a persisted SQLite lease queue dynamically assigns work instead of static rank sharding;
+- all conditions for one causal pair remain on one worker and physical GPU;
+- auto mode launches one to three independent model/environment workers per H100 based on free memory;
+- pair-local caching removes repeated byte-identical first-decision queries;
+- TensorFlow preprocessing uses the CPU-only wheel and cannot reserve H100 memory;
+- full runs encode videos only for representative pairs while retaining all numeric traces;
+- `nvidia-smi` monitoring generates a utilization and next-run slot recommendation.
 
-### First-action mediation
+OpenVLA-OFT's released continuous-action path has batch-size-one assumptions, so this repository uses tested independent replicas rather than an unvalidated inference microbatch patch.
 
-| Condition | Query image | Actually executed first action |
-|---|---|---|
-| Query only (`K0`) | stale | none; immediately query the true image |
-| Stale query / true action | stale | action generated from the true image |
-| True query / stale action | true | action generated from the stale image |
-| Stale action + reset | stale | execute one action, restore exact simulator state, then continue |
-| Scale curve | stale | scale first 6-DoF motion by 10%, 25%, 50%, 75%, or 100% |
-
-The analysis verifies action identity across crossover conditions and exact state restoration before reporting inferential statistics.
-
-### Instruction rescue
-
-At the first query only, the stale robot image is paired with one of:
-
-- the original long-horizon instruction;
-- the remaining subgoal only;
-- an explicit statement that the first subgoal is already complete;
-- the deliberately wrong previous subgoal.
-
-Subsequent queries return to the original instruction and true observation.
-
-## Experimental safeguards
-
-- prospective, frozen cohort lock;
-- policy-free intervention feasibility screening;
-- identical initial state and action prefix within every pair;
-- pinned model and source revisions;
-- one GPU-isolated worker per H100;
-- no post-freeze replacement;
-- append-only results with restart support;
-- exact replay and image-identity checks;
-- smoke gate required before a confirmatory full run;
-- paired bootstrap confidence intervals and exact discordant-pair tests;
-- Holm correction for the preregistered directional family;
-- 90% confidence-interval criterion for equivalence controls.
-
-## Target hardware
-
-The launcher targets one node with **8× NVIDIA H100**. The host may expose CUDA 12.9; the reproducibility environment intentionally uses the OpenVLA-OFT-compatible PyTorch 2.2.0 `cu121` runtime. No local FlashAttention build is required.
-
-## Installation
+## Install
 
 ```bash
 git clone https://github.com/ThisIsHwang/dd.git
 cd dd
-bash scripts/bootstrap_conda.sh
+conda create -n progressflip python=3.10 -y
 conda activate progressflip
+bash scripts/bootstrap.sh
+bash scripts/prefetch_checkpoint.sh
 ```
 
-Validate the node before any scientific run:
+The host may expose CUDA 12.9. The reproducibility environment uses the OpenVLA-OFT-compatible PyTorch 2.2.0 `cu121` wheel.
+
+## Smoke run
 
 ```bash
+export OPENVLA_OFT_CHECKPOINT="$PWD/checkpoints/openvla-oft-libero10"
+export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_smoke
 export PROGRESSFLIP_GPU_LIST=0,1,2,3,4,5,6,7
-export PROGRESSFLIP_RENDER_BACKEND=egl
-progressflip-doctor --project-root "$PWD" --expect-gpus 8 --strict
+export PF_WORKERS_PER_GPU=auto
+export MUJOCO_GL=egl
+export PYOPENGL_PLATFORM=egl
+
+progressflip preflight --config configs/smoke.yaml --expect-gpus 8
+bash scripts/run_pipeline.sh configs/smoke.yaml
 ```
 
-Use `PROGRESSFLIP_RENDER_BACKEND=osmesa` only when EGL is unavailable and OSMesa is installed.
+## Full run
 
-## Run the OpenVLA-OFT experiment
-
-The smoke run uses one prefix per task and all 24 conditions. The full run uses 15 locked prefixes per task.
+Use a separate node-local output directory:
 
 ```bash
-bash scripts/prepare_prospective_source.sh
-bash scripts/run_visual_self_state_pipeline.sh \
-  /local_nvme/$USER/self_state_oft_smoke \
-  /local_nvme/$USER/self_state_oft_full
+export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_full
+# Set this to the smoke report's recommendation; 3 is the H100-80GB target.
+export PF_WORKERS_PER_GPU=3
+bash scripts/run_pipeline.sh configs/full.yaml
 ```
 
-Expected outcome jobs:
+The pipeline performs:
 
 ```text
-smoke: 4 tasks × 1 prefix × 24 conditions = 96
-full:  4 tasks × 15 prefixes × 24 conditions = 1,440
+8-GPU prospective candidate screening
+  → deterministic first-K cohort freeze
+  → pair × condition manifest freeze
+  → dynamic multi-slot 8-GPU rollout
+  → paired statistical analysis
 ```
 
-## Run the original OpenVLA cross-decoder replication
+## Resume
+
+The queue and results are append-only. Re-run the same command with the same output root:
 
 ```bash
-bash scripts/run_visual_self_state_original_openvla_pipeline.sh \
-  /local_nvme/$USER/self_state_original_smoke \
-  /local_nvme/$USER/self_state_original_full
-```
-
-Expected outcome jobs:
-
-```text
-smoke: 4 × 1 × 18 = 72
-full:  4 × 6 × 18 = 432
-```
-
-Run both stages sequentially:
-
-```bash
-bash scripts/run_visual_self_state_campaign.sh \
-  /local_nvme/$USER/visual_self_state_campaign
-```
-
-For Slurm:
-
-```bash
-sbatch scripts/slurm_visual_self_state_1node_8gpu.sbatch
+export PF_RESET_FAILED=1
+export PF_RECLAIM_RUNNING=1
+bash scripts/run_pipeline.sh configs/full.yaml
 ```
 
 ## Outputs
 
-Each run directory contains:
-
 ```text
-metadata/                 frozen config, source provenance, runtime and model metadata
-prefixes/                 action prefixes and counterfactual checkpoints
-screening/                policy-free feasibility results
-manifests/                frozen cohort and condition jobs
-results/rank_*.jsonl      append-only outcome records
-traces/                   per-step actions, states, predicates and distances
-videos/                   retained qualitative rollouts
-analysis/report.md        original ProgressFlip analysis
-analysis/self_state_report.md
-analysis/self_state_summary.json
-analysis/self_state_condition_summary.csv
-analysis/self_state_contrasts.csv
-analysis/self_state_scaling_curve.csv
+pairs/                         frozen causal pair packs
+cohort_lock.json               prospective cohort selection
+manifest.jsonl                 frozen pair × condition jobs
+queues/*.sqlite3               persistent collection and rollout queues
+results/rank-*.jsonl           append-only outcomes
+traces/                        per-condition numeric traces
+videos/                        representative qualitative rollouts
+analysis/report.md             scientific analysis
+runtime/*_gpu_plan.json        resolved worker slots
+runtime/*_gpu_metrics.csv      raw nvidia-smi samples
+runtime/*_utilization/         utilization report and next-run recommendation
 ```
 
-The self-state inference gate fails if any requested condition is missing, any result is invalid, the pixel mask fails, recomposition exceeds the configured tolerance, crossover action identity fails, the scale intervention is wrong, the post-action reset is inexact, or an instruction override is not the preregistered one.
-
-## Analysis only
+## Slurm
 
 ```bash
-progressflip-analyze-self-state \
-  --config /path/to/run/metadata/config.yaml \
-  --run-dir /path/to/run
+mkdir -p logs
+export PROGRESSFLIP_CONDA_ENV=progressflip
+export OPENVLA_OFT_CHECKPOINT=$PWD/checkpoints/openvla-oft-libero10
+export PROGRESSFLIP_PERSIST_ROOT=$HOME/progressflip_results/$SLURM_JOB_ID
+sbatch slurm/1node_8gpu.sbatch
 ```
 
-The report also measures the first selected action relative to:
+## Documentation
 
-- the true end-effector position and next goal;
-- the stale visually implied end-effector position and next goal;
-- the true/stale end-effector position and the already completed progress object.
-
-These direction diagnostics help distinguish high-level subgoal regression from low-level visual self-localization error.
+- [8×H100 getting started](docs/GETTING_STARTED.md)
+- [GPU utilization design and tuning](docs/GPU_UTILIZATION.md)
 
 ## Tests
 
-CPU-only unit and regression tests do not require MuJoCo rendering or model weights:
-
 ```bash
 python -m pytest -q
-python -m compileall -q progressflip tests
+python -m compileall -q src tests
 ```
 
-The final hardware smoke test must still be run on the target H100 node. This repository does not claim that EGL, the model checkpoint, or the 8-GPU end-to-end path was executed in the repository-build environment.
+CPU tests do not replace the required H100 smoke test. The repository does not claim that EGL, checkpoint loading, or the multi-process H100 path was executed outside the target node.
 
-## Research documents
+## Scope
 
-- [Experiment design](docs/EXPERIMENT_DESIGN.md)
-- [Preregistration](docs/PREREGISTRATION.md)
-- [Results motivating this experiment](docs/RESULTS_SO_FAR.md)
-- [Implementation and validity notes](docs/IMPLEMENTATION_NOTES.md)
-- [Environment profile](environment/README.md)
-- [Third-party software](THIRD_PARTY.md)
-
-## Scope of claims
-
-This code supports a controlled simulation study. A successful run can establish causal sensitivity to visual self-state interventions for the evaluated policies and screened LIBERO population. It does **not** by itself establish the same mechanism for every VLA, every task, or a physical robot.
-
-## License
-
-ProgressFlip source code is released under the MIT License. OpenVLA-OFT, OpenVLA, LIBERO, robosuite, MuJoCo, and model checkpoints remain under their own licenses and terms.
+This code supports a controlled LIBERO simulation study. It can establish causal sensitivity for the evaluated policies and frozen screened population. It does not by itself establish the same mechanism for every VLA or for a physical robot.
