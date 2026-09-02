@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import atomic_json
+from .gpu_plan import resolve_worker_plan
 
 
 def _package(name: str) -> str | None:
@@ -47,6 +48,15 @@ def checkpoint_report(path: str | Path) -> dict[str, Any]:
     }
 
 
+def _tensorflow_gpu_devices() -> list[str] | None:
+    try:
+        import tensorflow as tf
+
+        return [device.name for device in tf.config.list_physical_devices("GPU")]
+    except Exception:
+        return None
+
+
 def run_preflight(cfg: dict[str, Any], expect_gpus: int = 8) -> dict[str, Any]:
     import torch
 
@@ -62,12 +72,22 @@ def run_preflight(cfg: dict[str, Any], expect_gpus: int = 8) -> dict[str, Any]:
             }
         )
     checkpoint = checkpoint_report(cfg["model"]["checkpoint"])
+    tensorflow_gpus = _tensorflow_gpu_devices()
+    gpu_ids = ",".join(str(value) for value in cfg["compute"]["gpu_ids"])
+    worker_plan: dict[str, Any] | None = None
+    worker_plan_error: str | None = None
+    try:
+        worker_plan = resolve_worker_plan(cfg, gpu_ids).to_dict()
+    except Exception as exc:
+        worker_plan_error = f"{type(exc).__name__}: {exc}"
     checks = {
         "cuda_available": bool(torch.cuda.is_available()),
         "gpu_count": len(devices) == int(expect_gpus),
         "all_h100": bool(devices) and all("H100" in device["name"] for device in devices),
         "checkpoint_complete": checkpoint["complete"],
         "mujoco_gl": os.environ.get("MUJOCO_GL", "").lower() in {"egl", "osmesa"},
+        "tensorflow_does_not_claim_gpu": tensorflow_gpus == [],
+        "worker_plan_resolved": worker_plan is not None,
     }
     result = {
         "ok": all(checks.values()),
@@ -77,6 +97,9 @@ def run_preflight(cfg: dict[str, Any], expect_gpus: int = 8) -> dict[str, Any]:
         "torch": torch.__version__,
         "torch_cuda_runtime": torch.version.cuda,
         "devices": devices,
+        "tensorflow_visible_gpus": tensorflow_gpus,
+        "recommended_worker_plan": worker_plan,
+        "worker_plan_error": worker_plan_error,
         "checkpoint": checkpoint,
         "packages": {
             name: _package(name)
