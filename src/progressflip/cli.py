@@ -140,7 +140,8 @@ def main(argv: list[str] | None = None) -> int:
     elif arguments.command == "queue-status":
         result = queue_summary(cfg, arguments.kind)
         counts = result["counts"]
-        exit_code = 0 if not counts["failed"] else 3
+        incomplete = counts["pending"] or counts["running"] or counts["failed"]
+        exit_code = 0 if not incomplete else 3
     elif arguments.command == "gpu-plan":
         result = write_worker_plan(
             cfg,
