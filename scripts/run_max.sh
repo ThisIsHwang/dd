@@ -11,7 +11,6 @@ CONFIG="$(realpath "$2")"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_ROOT="${PROGRESSFLIP_OUTPUT_ROOT:?Set PROGRESSFLIP_OUTPUT_ROOT to node-local storage}"
 GPU_LIST="${PROGRESSFLIP_GPU_LIST:-0,1,2,3,4,5,6,7}"
-REQUESTED_SLOTS="${PF_WORKERS_PER_GPU:-auto}"
 RESET_FAILED="${PF_RESET_FAILED:-1}"
 config_value() {
   python - "$CONFIG" "$1" <<'PYCFG'
@@ -24,6 +23,7 @@ for part in sys.argv[2].split('.'):
 print(value)
 PYCFG
 }
+REQUESTED_SLOTS="${PF_WORKERS_PER_GPU:-$(config_value compute.workers_per_gpu)}"
 STARTUP_STAGGER="${PF_STARTUP_STAGGER_SECONDS:-$(config_value compute.startup_stagger_seconds)}"
 MONITOR_INTERVAL="${PF_GPU_MONITOR_INTERVAL_SECONDS:-$(config_value compute.gpu_monitor_interval_seconds)}"
 CPU_THREADS="${PF_CPU_THREADS:-$(config_value compute.cpu_threads_per_worker)}"
