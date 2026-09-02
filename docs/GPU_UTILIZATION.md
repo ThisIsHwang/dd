@@ -49,6 +49,19 @@ Within a pair, many conditions request byte-identical true or stale first-decisi
 
 Only identical inputs reuse an action chunk. Cache entries never cross pair boundaries.
 
+## EGL placement across eight GPUs
+
+robosuite 1.4.x can treat `CUDA_VISIBLE_DEVICES` as an index into EGL's separately ordered device list. That assumption is not portable across bare-metal, container, and MIG layouts. Each dynamic worker installs an in-memory patch **before the first render context is created**. It queries NVIDIA's `EGL_CUDA_DEVICE_NV` attribute and selects the EGL device matching the worker's process-local CUDA ordinal 0.
+
+The launcher deliberately unsets `MUJOCO_EGL_DEVICE_ID`; a host physical GPU number and an EGL list index are not guaranteed to share a namespace. The patch modifies no files in site-packages and fails loudly if the NVIDIA query extension is unavailable. In that case, use the CPU rendering fallback:
+
+```bash
+export MUJOCO_GL=osmesa
+export PYOPENGL_PLATFORM=osmesa
+```
+
+After the smoke run, confirm that peak memory and utilization are distributed across all eight physical GPUs in `runtime/*_utilization/gpu_utilization_report.md`.
+
 ## Video overhead
 
 Full runs save videos only for the first two frozen pairs per task by default. All pairs still save numeric traces and results. This avoids blocking inference workers on repeated FFmpeg encoding while preserving representative qualitative evidence. Change `data.video_pairs_per_task` to increase or disable this limit.
