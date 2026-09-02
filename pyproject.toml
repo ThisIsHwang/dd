@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6,<0.17"]
 
 [project.scripts]
 progressflip = "progressflip.cli:main"
@@ -36,3 +36,14 @@ addopts = "-q"
 [tool.ruff]
 line-length = 110
 target-version = "py310"
+
+[tool.ruff.lint]
+# Pin the project to Ruff's stable correctness-oriented default families rather
+# than inheriting an expanding set of preview/style rules from future releases.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# The legacy static runner remains available for backwards compatibility; the
+# optimized dynamic runner is the default path.
+"src/progressflip/runner.py" = ["F841"]
+"src/progressflip/dynamic_runner.py" = ["F841"]
