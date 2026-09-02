@@ -6,14 +6,14 @@ export PROGRESSFLIP_OUTPUT_ROOT="${PROGRESSFLIP_OUTPUT_ROOT:-${ROOT}/outputs/run
 export OPENVLA_OFT_CHECKPOINT="${OPENVLA_OFT_CHECKPOINT:-${ROOT}/checkpoints/openvla-oft-libero10}"
 mkdir -p "${PROGRESSFLIP_OUTPUT_ROOT}"
 if [[ ! -f "${OPENVLA_OFT_CHECKPOINT}/dataset_statistics.json" ]]; then
-  "${ROOT}/scripts/prefetch_checkpoint.sh" "${OPENVLA_OFT_CHECKPOINT}"
+  bash "${ROOT}/scripts/prefetch_checkpoint.sh" "${OPENVLA_OFT_CHECKPOINT}"
 fi
 export MUJOCO_GL="${MUJOCO_GL:-egl}"
 export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-egl}"
 progressflip preflight --config "${CONFIG}" --expect-gpus 8
-"${ROOT}/scripts/run_collect.sh" "${CONFIG}"
+bash "${ROOT}/scripts/run_collect.sh" "${CONFIG}"
 progressflip manifest --config "${CONFIG}"
-"${ROOT}/scripts/run_8gpu.sh" "${CONFIG}"
+bash "${ROOT}/scripts/run_8gpu.sh" "${CONFIG}"
 progressflip analyze --config "${CONFIG}"
 echo "Report: ${PROGRESSFLIP_OUTPUT_ROOT}/analysis/report.md"
 echo "Collection GPU utilization: ${PROGRESSFLIP_OUTPUT_ROOT}/runtime/collect_utilization/gpu_utilization_report.md"
