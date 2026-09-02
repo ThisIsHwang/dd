@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from progressflip.config import load_config
+from progressflip.egl_affinity import unique_device_for_cuda_ordinal
 from progressflip.gpu_metrics import summarize_gpu_metrics
 from progressflip.gpu_plan import GPUDevice, resolve_worker_plan
 from progressflip.query_cache import PolicyQueryCache
@@ -104,6 +106,15 @@ def test_gpu_plan_auto_uses_minimum_free_memory(monkeypatch):
     plan = resolve_worker_plan(cfg, range(8))
     assert plan.workers_per_gpu == 3
     assert plan.total_workers == 24
+
+
+def test_egl_affinity_matches_logical_cuda_ordinal():
+    devices = ["egl-a", "egl-b", "egl-c"]
+    mapping = {"egl-a": 2, "egl-b": 0, "egl-c": 1}
+    selected = unique_device_for_cuda_ordinal(devices, 0, mapping.get)
+    assert selected == "egl-b"
+    with pytest.raises(RuntimeError, match="exactly one EGL device"):
+        unique_device_for_cuda_ordinal(devices, 4, mapping.get)
 
 
 def test_gpu_metric_summary(tmp_path: Path):
