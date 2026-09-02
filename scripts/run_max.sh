@@ -112,8 +112,10 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 worker_index=0
-for gpu in "${GPU_IDS[@]}"; do
-  for ((slot=0; slot<SLOTS; slot++)); do
+# Start one replica on every GPU before adding a second / third replica. This
+# avoids three checkpoint loads contending on GPU 0 while the other cards sit idle.
+for ((slot=0; slot<SLOTS; slot++)); do
+  for gpu in "${GPU_IDS[@]}"; do
     if [[ "$MODE" == "run" ]]; then
       worker_prefix="rank"
     else
