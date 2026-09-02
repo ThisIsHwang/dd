@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,7 +31,7 @@ class PairRecord:
     metadata: dict[str, Any]
 
     @classmethod
-    def load(cls, directory: str | Path) -> "PairRecord":
+    def load(cls, directory: str | Path) -> PairRecord:
         root = Path(directory)
         metadata = json.loads((root / "pair.json").read_text(encoding="utf-8"))
         with np.load(root / "states.npz", allow_pickle=False) as arrays:
@@ -67,8 +69,8 @@ class PairRecord:
         return mapping[mode]
 
 
-def write_pair(
-    directory: str | Path,
+def _write_pair_contents(
+    root: Path,
     metadata: dict[str, Any],
     *,
     initial_state: np.ndarray,
@@ -78,8 +80,6 @@ def write_pair(
     endpoint_state: np.ndarray,
     phase_states: dict[int, np.ndarray],
 ) -> None:
-    root = Path(directory)
-    root.mkdir(parents=True, exist_ok=False)
     arrays: dict[str, np.ndarray] = {
         "initial_state": np.asarray(initial_state),
         "prefix_actions": np.asarray(prefix_actions, dtype=np.float32),
@@ -95,6 +95,40 @@ def write_pair(
         path.name: sha256_file(path) for path in (root / "pair.json", root / "states.npz")
     }
     (root / "SHA256SUMS.json").write_text(json.dumps(checksums, indent=2, sort_keys=True) + "\n")
+
+
+def write_pair(
+    directory: str | Path,
+    metadata: dict[str, Any],
+    *,
+    initial_state: np.ndarray,
+    prefix_actions: np.ndarray,
+    trigger_state: np.ndarray,
+    object_advanced_state: np.ndarray,
+    endpoint_state: np.ndarray,
+    phase_states: dict[int, np.ndarray],
+) -> None:
+    root = Path(directory)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    if root.exists():
+        raise FileExistsError(root)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{root.name}.writing-", dir=root.parent))
+    try:
+        _write_pair_contents(
+            temporary,
+            metadata,
+            initial_state=initial_state,
+            prefix_actions=prefix_actions,
+            trigger_state=trigger_state,
+            object_advanced_state=object_advanced_state,
+            endpoint_state=endpoint_state,
+            phase_states=phase_states,
+        )
+        validate_pair(temporary)
+        temporary.replace(root)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
 
 
 def validate_pair(directory: str | Path) -> None:
