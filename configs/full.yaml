@@ -4,6 +4,20 @@ model:
   center_crop: true
   open_loop_steps: 8
 
+compute:
+  gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+  workers_per_gpu: auto
+  min_workers_per_gpu: 1
+  max_workers_per_gpu: 3
+  model_worker_memory_mb: 22000
+  gpu_reserve_memory_mb: 10000
+  lease_seconds: 3600
+  prefer_same_task: true
+  query_cache: true
+  cpu_threads_per_worker: 2
+  startup_stagger_seconds: 2
+  gpu_monitor_interval_seconds: 5
+
 environment:
   suite: libero_10
   image_size: 256
@@ -17,6 +31,7 @@ data:
   pairs_per_task: 10
   candidate_initial_states: 50
   save_videos: true
+  video_pairs_per_task: 2
   video_stride: 2
   video_conditions:
     - TRUE_K1
