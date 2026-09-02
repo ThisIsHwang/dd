@@ -23,6 +23,24 @@ def _expand(value: Any) -> Any:
     return value
 
 
+def _set_compute_defaults(cfg: dict[str, Any]) -> None:
+    compute = cfg.setdefault("compute", {})
+    if not isinstance(compute, dict):
+        raise ConfigError("compute must be a mapping")
+    compute.setdefault("gpu_ids", list(range(8)))
+    compute.setdefault("workers_per_gpu", "auto")
+    compute.setdefault("min_workers_per_gpu", 1)
+    compute.setdefault("max_workers_per_gpu", 3)
+    compute.setdefault("model_worker_memory_mb", 22000)
+    compute.setdefault("gpu_reserve_memory_mb", 10000)
+    compute.setdefault("lease_seconds", 3600)
+    compute.setdefault("prefer_same_task", True)
+    compute.setdefault("query_cache", True)
+    compute.setdefault("cpu_threads_per_worker", 2)
+    compute.setdefault("startup_stagger_seconds", 2)
+    compute.setdefault("gpu_monitor_interval_seconds", 5)
+
+
 def load_config(path: str | os.PathLike[str]) -> dict[str, Any]:
     config_path = Path(path).expanduser().resolve()
     if not config_path.is_file():
@@ -39,6 +57,7 @@ def load_config(path: str | os.PathLike[str]) -> dict[str, Any]:
         raise ConfigError("tasks must be a non-empty list")
     if not isinstance(cfg["experiment"].get("conditions"), list):
         raise ConfigError("experiment.conditions must be a list")
+    _set_compute_defaults(cfg)
     cfg["_config_path"] = str(config_path)
     cfg["data"]["output_root"] = str(Path(cfg["data"]["output_root"]).expanduser().resolve())
     validate_config(cfg)
@@ -66,6 +85,39 @@ def validate_config(cfg: dict[str, Any]) -> None:
         raise ConfigError("Condition names must be unique")
     if int(cfg["environment"].get("max_steps", 0)) <= 0:
         raise ConfigError("environment.max_steps must be positive")
+
+    compute = cfg["compute"]
+    gpu_ids = compute["gpu_ids"]
+    if not isinstance(gpu_ids, list) or not gpu_ids:
+        raise ConfigError("compute.gpu_ids must be a non-empty list")
+    normalized_ids = [int(value) for value in gpu_ids]
+    if len(normalized_ids) != len(set(normalized_ids)):
+        raise ConfigError("compute.gpu_ids must not contain duplicates")
+    compute["gpu_ids"] = normalized_ids
+    minimum = int(compute["min_workers_per_gpu"])
+    maximum = int(compute["max_workers_per_gpu"])
+    if minimum < 1 or maximum < minimum:
+        raise ConfigError(
+            "compute worker limits must satisfy 1 <= min_workers_per_gpu <= max_workers_per_gpu"
+        )
+    requested = compute["workers_per_gpu"]
+    if str(requested).lower() != "auto":
+        workers = int(requested)
+        if not minimum <= workers <= maximum:
+            raise ConfigError(
+                "compute.workers_per_gpu must be 'auto' or within the configured min/max range"
+            )
+    for key in (
+        "model_worker_memory_mb",
+        "gpu_reserve_memory_mb",
+        "lease_seconds",
+        "cpu_threads_per_worker",
+        "gpu_monitor_interval_seconds",
+    ):
+        if int(compute[key]) <= 0:
+            raise ConfigError(f"compute.{key} must be positive")
+    if int(compute["startup_stagger_seconds"]) < 0:
+        raise ConfigError("compute.startup_stagger_seconds must be non-negative")
 
 
 def fingerprint(cfg: dict[str, Any]) -> str:
