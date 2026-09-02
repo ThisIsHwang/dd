@@ -46,7 +46,8 @@ The host may expose CUDA 12.9. The reproducibility environment uses the OpenVLA-
 export OPENVLA_OFT_CHECKPOINT="$PWD/checkpoints/openvla-oft-libero10"
 export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_smoke
 export PROGRESSFLIP_GPU_LIST=0,1,2,3,4,5,6,7
-export PF_WORKERS_PER_GPU=auto
+# The smoke config intentionally uses one replica per H100.
+export PF_WORKERS_PER_GPU=1
 export MUJOCO_GL=egl
 export PYOPENGL_PLATFORM=egl
 
@@ -62,6 +63,13 @@ Use a separate node-local output directory:
 export PROGRESSFLIP_OUTPUT_ROOT=/local_nvme/$USER/progressflip_full
 # Set this to the smoke report's recommendation; 3 is the H100-80GB target.
 export PF_WORKERS_PER_GPU=3
+bash scripts/run_pipeline.sh configs/full.yaml
+```
+
+Or let the full config choose from current free memory:
+
+```bash
+unset PF_WORKERS_PER_GPU
 bash scripts/run_pipeline.sh configs/full.yaml
 ```
 
@@ -121,6 +129,7 @@ sbatch slurm/1node_8gpu.sbatch
 ```bash
 python -m pytest -q
 python -m compileall -q src tests
+ruff check src tests
 ```
 
 CPU tests do not replace the required H100 smoke test. The repository does not claim that EGL, checkpoint loading, or the multi-process H100 path was executed outside the target node.
