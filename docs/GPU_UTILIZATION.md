@@ -91,10 +91,11 @@ The report contains utilization, idle fraction, peak memory, and a next-run slot
 
 Recommended tuning order:
 
-1. Run `configs/smoke.yaml` with `PF_WORKERS_PER_GPU=auto`.
-2. Confirm that every worker loaded successfully and no EGL or CUDA OOM errors occurred.
-3. Read the generated utilization report.
-4. Use the recommended slot count for the full frozen manifest.
+1. Run `configs/smoke.yaml` with one worker per GPU to validate checkpoint loading and EGL placement safely.
+2. Confirm that all eight workers loaded successfully and no EGL or CUDA OOM errors occurred.
+3. Read the generated peak-memory and utilization report.
+4. Use `PF_WORKERS_PER_GPU=2`, `3`, or full-config `auto` for the full frozen experiment.
+5. Keep the setting whose report shows the best throughput without OOM or severe context contention.
 
 Do not compare scientific outcomes across different manifests when tuning throughput. Launcher changes are operational; the causal unit and condition definitions must remain fixed.
 
