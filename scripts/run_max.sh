@@ -78,7 +78,7 @@ fi
 "${init_args[@]}"
 
 METRICS="$OUTPUT_ROOT/runtime/${MODE}_gpu_metrics.csv"
-"$ROOT/scripts/monitor_gpus.sh" "$GPU_LIST" "$METRICS" "$MONITOR_INTERVAL" &
+bash "$ROOT/scripts/monitor_gpus.sh" "$GPU_LIST" "$METRICS" "$MONITOR_INTERVAL" &
 MONITOR_PID="$!"
 
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
