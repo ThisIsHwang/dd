@@ -1,11 +1,7 @@
 name: bootstrap-source
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "_bootstrap/**"
-      - ".github/workflows/bootstrap.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,17 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify source archive structure
+      - name: Reassemble and verify source archive
         shell: bash
         run: |
-          sha256sum _bootstrap/progressflip_visual_self_state_v0.5.0.tar.gz
-          file _bootstrap/progressflip_visual_self_state_v0.5.0.tar.gz
-          tar -tzf _bootstrap/progressflip_visual_self_state_v0.5.0.tar.gz >/dev/null
+          cat _bootstrap/chunks/part-* | base64 --decode > /tmp/progressflip-source.tar.gz
+          echo "1b0b6cb0731f7f18760ecefef6d2342c90a5047afe17609a7d3eb7ddf1ceff8d  /tmp/progressflip-source.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/progressflip-source.tar.gz >/dev/null
 
       - name: Expand repository source
         shell: bash
         run: |
-          tar -xzf _bootstrap/progressflip_visual_self_state_v0.5.0.tar.gz -C .
+          tar -xzf /tmp/progressflip-source.tar.gz -C .
           rm -rf _bootstrap
           rm -f .github/workflows/bootstrap.yml
 
